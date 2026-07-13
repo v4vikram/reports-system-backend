@@ -10,6 +10,7 @@ import { errorHandler } from "./middleware/errorHandler.middlware.js";
 import { notFoundHandler } from "./middleware/notFound.middlware.js";
 import { apiRateLimiter } from "./middleware/rateLimiter.middlware.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
+import { categoryRouter } from "./modules/category/category.routes.js";
 
 export const app = express();
 
@@ -33,6 +34,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/categories", categoryRouter);
 
 // Further feature routes get mounted here as they're built, e.g.:
 // app.use("/api/reports", reportsRouter);

@@ -68,3 +68,13 @@ export const logout = asyncHandler(async (req, res) => {
 export const me = asyncHandler(async (req, res) => {
   new ApiResponse(HttpStatus.OK, req.user, SuccessMessages.FETCHED).send(res);
 });
+
+export const forgotPassword = asyncHandler(async (req, res) => {
+  await authService.requestPasswordReset(req.body.email);
+  new ApiResponse(HttpStatus.OK, null, SuccessMessages.PASSWORD_RESET_EMAIL_SENT).send(res);
+});
+
+export const resetPassword = asyncHandler(async (req, res) => {
+  await authService.resetPassword(req.body);
+  new ApiResponse(HttpStatus.OK, null, SuccessMessages.PASSWORD_RESET_SUCCESS).send(res);
+});

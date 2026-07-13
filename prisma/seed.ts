@@ -48,6 +48,30 @@ async function main() {
   console.log(
     `Seeded ${permissionKeys.length} permission(s) and the "Admin" role with full access.`
   );
+
+  // Change SEED_ADMIN_EMAIL in .env and re-run this seed to promote a
+  // different (already-registered) account instead — no code change needed.
+  const adminEmail = process.env.SEED_ADMIN_EMAIL;
+
+  if (!adminEmail) {
+    console.log("SEED_ADMIN_EMAIL not set — skipping admin assignment.");
+  } else {
+    const adminUser = await prisma.user.findUnique({ where: { email: adminEmail } });
+
+    if (!adminUser) {
+      console.warn(
+        `No user found with email "${adminEmail}" — skipping admin assignment. ` +
+          "Register that account first, then re-run this seed."
+      );
+    } else {
+      await prisma.userRole.upsert({
+        where: { userId_roleId: { userId: adminUser.id, roleId: adminRole.id } },
+        update: {},
+        create: { userId: adminUser.id, roleId: adminRole.id },
+      });
+      console.log(`Assigned the "Admin" role to ${adminEmail}.`);
+    }
+  }
 }
 
 main()

@@ -4,14 +4,17 @@ import { SignJWT, jwtVerify } from "jose";
 import ms from "ms";
 import { env } from "../../config/env.js";
 import { ErrorMessages, HttpStatus } from "../../constants/index.js";
+import { logger } from "../../lib/logger.js";
+import { sendMail } from "../../lib/mailer.js";
 import { prisma } from "../../lib/prisma.js";
 import type { AuthUser } from "../../types/auth.types.js";
 import { ApiError } from "../../utils/ApiError.js";
-import type { LoginInput, RegisterInput } from "./auth.validation.js";
+import type { LoginInput, RegisterInput, ResetPasswordInput } from "./auth.validation.js";
 
 const ACCESS_SECRET = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 const REFRESH_SECRET = new TextEncoder().encode(env.JWT_REFRESH_SECRET);
 const BCRYPT_ROUNDS = 12;
+const PASSWORD_RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
 
 interface SessionMeta {
   userAgent?: string;
@@ -179,4 +182,60 @@ export async function revokeRefreshToken(rawToken: string): Promise<void> {
     where: { tokenHash, revokedAt: null },
     data: { revokedAt: new Date() },
   });
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  // Always resolve the same way whether or not the email exists, so the
+  // response never reveals which emails are registered.
+  if (!user || !user.isActive) {
+    return;
+  }
+
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS);
+
+  await prisma.passwordResetToken.create({
+    data: {
+      userId: user.id,
+      tokenHash: hashToken(rawToken),
+      expiresAt,
+    },
+  });
+
+  const resetUrl = `${env.CORS_ORIGIN}/reset-password?token=${rawToken}`;
+
+  // A delivery failure here must never surface as a different response
+  // than the "email not registered" case above — that difference would
+  // itself be a user-enumeration oracle. Log it and move on.
+  try {
+    await sendMail({
+      to: user.email,
+      subject: "Reset your password",
+      html: `<p>Hi ${user.name},</p><p>Click the link below to reset your password. This link expires in 30 minutes and can only be used once.</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can safely ignore this email.</p>`,
+    });
+  } catch (err) {
+    logger.error({ err, userId: user.id }, "Failed to send password reset email");
+  }
+}
+
+export async function resetPassword(input: ResetPasswordInput): Promise<void> {
+  const tokenHash = hashToken(input.token);
+  const record = await prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+
+  if (!record || record.usedAt || record.expiresAt < new Date()) {
+    throw new ApiError(HttpStatus.BAD_REQUEST, ErrorMessages.INVALID_RESET_TOKEN);
+  }
+
+  const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
+
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
+    prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+    prisma.refreshToken.updateMany({
+      where: { userId: record.userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    }),
+  ]);
 }

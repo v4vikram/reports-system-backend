@@ -1,9 +1,13 @@
 import type { NextFunction, Request, Response } from "express";
 
-type AsyncRequestHandler = (req: Request, res: Response, next: NextFunction) => Promise<unknown>;
+type AsyncRequestHandler<P = Record<string, string>> = (
+  req: Request<P>,
+  res: Response,
+  next: NextFunction
+) => Promise<unknown>;
 
-export function asyncHandler(handler: AsyncRequestHandler) {
-  return (req: Request, res: Response, next: NextFunction) => {
+export function asyncHandler<P = Record<string, string>>(handler: AsyncRequestHandler<P>) {
+  return (req: Request<P>, res: Response, next: NextFunction) => {
     Promise.resolve(handler(req, res, next)).catch(next);
   };
 }

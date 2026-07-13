@@ -106,3 +106,24 @@ model PasswordResetToken {
   @@index([userId])
   @@map("password_reset_tokens")
 }
+
+// Category module — see docs/architecture/erd.md#category-module for rationale.
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String
+  description String?
+  parentId    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  parent   Category?  @relation("CategoryToSubcategories", fields: [parentId], references: [id], onDelete: Restrict)
+  children Category[] @relation("CategoryToSubcategories")
+
+  @@unique([parentId, name])
+  @@unique([parentId, slug])
+  @@index([parentId])
+  @@map("categories")
+}
