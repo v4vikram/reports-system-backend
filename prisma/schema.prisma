@@ -22,8 +22,10 @@ model User {
   updatedAt       DateTime  @updatedAt
 
   roles               UserRole[]
+  permissions         UserPermission[]
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
+  assignedClients     Client[]
 
   @@map("users")
 }
@@ -49,6 +51,7 @@ model Permission {
   createdAt   DateTime @default(now())
 
   roles RolePermission[]
+  users UserPermission[]
 
   @@map("permissions")
 }
@@ -74,6 +77,17 @@ model RolePermission {
 
   @@id([roleId, permissionId])
   @@map("role_permissions")
+}
+
+model UserPermission {
+  userId       String
+  permissionId String
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, permissionId])
+  @@map("user_permissions")
 }
 
 model RefreshToken {
@@ -126,4 +140,25 @@ model Category {
   @@unique([parentId, slug])
   @@index([parentId])
   @@map("categories")
+}
+
+// Client module — see docs/architecture/erd.md#client-module for rationale.
+
+model Client {
+  id             String   @id @default(cuid())
+  name           String
+  company        String?
+  email          String?
+  phone          String?
+  address        String?
+  notes          String?
+  isActive       Boolean  @default(true)
+  assignedUserId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  assignedUser User? @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+
+  @@index([assignedUserId])
+  @@map("clients")
 }

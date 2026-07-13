@@ -9,6 +9,17 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   const permissionKeys = Object.values(PERMISSIONS);
 
+  // Keeps the DB's permission catalog in sync with the code-defined one —
+  // a key removed/renamed here (e.g. the users:manage/clients:manage split)
+  // stops being just an addition and actually disappears, along with any
+  // RolePermission/UserPermission grants that pointed at it (cascade).
+  const pruned = await prisma.permission.deleteMany({
+    where: { key: { notIn: permissionKeys } },
+  });
+  if (pruned.count > 0) {
+    console.log(`Pruned ${pruned.count} stale permission(s) no longer in the catalog.`);
+  }
+
   await Promise.all(
     permissionKeys.map((key) =>
       prisma.permission.upsert({

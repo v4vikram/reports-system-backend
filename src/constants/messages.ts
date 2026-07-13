@@ -13,6 +13,11 @@ export const ErrorMessages = {
   CATEGORY_PARENT_NOT_FOUND: "Parent category not found",
   CATEGORY_CYCLE: "Cannot move a category under its own descendant",
   CATEGORY_HAS_CHILDREN: "Move or delete its subcategories first",
+  CLIENT_ASSIGNEE_NOT_FOUND: "Assigned user not found",
+  CANNOT_MODIFY_SELF: "You cannot change your own roles, permissions, or active status this way",
+  CANNOT_DELETE_SELF: "You cannot delete your own account",
+  ROLE_NOT_FOUND: "One or more roles were not found",
+  PERMISSION_NOT_FOUND: "One or more permissions were not found",
 } as const;
 
 export const SuccessMessages = {

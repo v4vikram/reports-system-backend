@@ -72,6 +72,10 @@ export async function getAuthUserById(userId: string): Promise<AuthUser | null> 
           },
         },
       },
+      // Direct grants, additive to whatever the user's roles already give
+      // them — see docs/architecture/erd.md#auth-module ("Direct per-user
+      // permission grants"). This is the one place the union is computed.
+      permissions: { include: { permission: true } },
     },
   });
 
@@ -84,11 +88,11 @@ export async function getAuthUserById(userId: string): Promise<AuthUser | null> 
     name: userRole.role.name,
   }));
 
-  const permissions = Array.from(
-    new Set(
-      user.roles.flatMap((userRole) => userRole.role.permissions.map((rp) => rp.permission.key))
-    )
+  const rolePermissionKeys = user.roles.flatMap((userRole) =>
+    userRole.role.permissions.map((rp) => rp.permission.key)
   );
+  const directPermissionKeys = user.permissions.map((up) => up.permission.key);
+  const permissions = Array.from(new Set([...rolePermissionKeys, ...directPermissionKeys]));
 
   return { id: user.id, name: user.name, email: user.email, roles, permissions };
 }

@@ -11,6 +11,10 @@ import { notFoundHandler } from "./middleware/notFound.middlware.js";
 import { apiRateLimiter } from "./middleware/rateLimiter.middlware.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { categoryRouter } from "./modules/category/category.routes.js";
+import { clientRouter } from "./modules/client/client.routes.js";
+import { permissionRouter } from "./modules/user/permission.routes.js";
+import { roleRouter } from "./modules/user/role.routes.js";
+import { userRouter } from "./modules/user/user.routes.js";
 
 export const app = express();
 
@@ -35,6 +39,10 @@ app.get("/health", (_req, res) => {
 
 app.use("/api/auth", authRouter);
 app.use("/api/categories", categoryRouter);
+app.use("/api/users", userRouter);
+app.use("/api/roles", roleRouter);
+app.use("/api/permissions", permissionRouter);
+app.use("/api/clients", clientRouter);
 
 // Further feature routes get mounted here as they're built, e.g.:
 // app.use("/api/reports", reportsRouter);

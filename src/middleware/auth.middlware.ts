@@ -44,3 +44,15 @@ export function requirePermission(permission: string) {
     next();
   };
 }
+
+// For routes where holding any one of several permissions is enough — e.g.
+// viewing the employee directory requires *some* users:* capability, not
+// one specific permission.
+export function requireAnyPermission(permissions: string[]) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    if (!permissions.some((permission) => req.user?.permissions.includes(permission))) {
+      throw new ApiError(HttpStatus.FORBIDDEN, ErrorMessages.FORBIDDEN);
+    }
+    next();
+  };
+}
