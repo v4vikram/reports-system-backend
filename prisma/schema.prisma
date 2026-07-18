@@ -57,6 +57,11 @@ model User {
   roles             UserRole[]
   directPermissions UserPermission[]
   assignedClients   Client[]
+  // The Client CRM record this user logs in AS, if they're a portal login
+  // (see Client.portalUserId). Distinct from assignedClients, which is the
+  // employee-manages-client direction.
+  clientProfile     Client?          @relation("ClientPortalUser")
+  reportAssignments ReportAssignee[]
 
   refreshTokens           RefreshToken[]
   passwordResetTokens     PasswordResetToken[]
@@ -106,18 +111,18 @@ model UserPermission {
 // expiry. replacedByTokenId links rotation chains: if a revoked token is
 // ever presented again, that's a theft signal (see auth.service.ts).
 model RefreshToken {
-  id                String    @id @default(cuid())
+  id                String        @id @default(cuid())
   userId            String
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash         String    @unique
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash         String        @unique
   expiresAt         DateTime
   revokedAt         DateTime?
-  replacedByTokenId String?   @unique
-  replacedByToken   RefreshToken?  @relation("TokenRotation", fields: [replacedByTokenId], references: [id])
-  previousToken     RefreshToken?  @relation("TokenRotation")
+  replacedByTokenId String?       @unique
+  replacedByToken   RefreshToken? @relation("TokenRotation", fields: [replacedByTokenId], references: [id])
+  previousToken     RefreshToken? @relation("TokenRotation")
   createdByIp       String?
   userAgent         String?
-  createdAt         DateTime  @default(now())
+  createdAt         DateTime      @default(now())
 
   @@index([userId, revokedAt])
   @@map("refresh_tokens")
@@ -180,6 +185,8 @@ model Category {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
+  reports Report[]
+
   @@index([parentId])
   @@map("categories")
 }
@@ -198,9 +205,76 @@ model Client {
   // The employee (user) responsible for this client; nullable = unassigned.
   assignedUserId String?
   assignedUser   User?    @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+  // The CLIENT-role user who logs in AS this client (a portal login), set by
+  // an admin. Distinct from assignedUserId (the employee who manages this
+  // client). Nullable = no portal access yet.
+  portalUserId   String?  @unique
+  portalUser     User?    @relation("ClientPortalUser", fields: [portalUserId], references: [id], onDelete: SetNull)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  events  Event[]
+  reports Report[]
+
   @@index([assignedUserId])
+  @@index([portalUserId])
   @@map("clients")
+}
+
+// ---- Module 5: Events & Reports (see docs/ERD.md) ----
+
+model Event {
+  id          String    @id @default(cuid())
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  eventDate   DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  reports Report[]
+
+  @@index([clientId])
+  @@map("events")
+}
+
+model Report {
+  id      String  @id @default(cuid())
+  title   String
+  content String?
+
+  clientId   String
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  eventId    String
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  // Restrict (not the codebase's usual Cascade): categories are shared
+  // taxonomy referenced across unrelated clients, so deleting one shouldn't
+  // silently wipe another client's report history. See categories.service.ts
+  // deleteCategory for the friendlier pre-check backing this constraint.
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignees ReportAssignee[]
+
+  @@index([clientId])
+  @@index([eventId])
+  @@index([categoryId])
+  @@map("reports")
+}
+
+// M2M: which employees are assigned to a report.
+model ReportAssignee {
+  reportId String
+  report   Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([reportId, userId])
+  @@index([userId])
+  @@map("report_assignees")
 }
