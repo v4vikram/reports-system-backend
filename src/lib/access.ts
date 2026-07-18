@@ -4,6 +4,11 @@ export interface UserAccess {
   roles: { id: string; name: string }[];
   // Effective permission keys: union of every role's permissions + direct grants.
   permissions: string[];
+  // The Client.id this user is the portal login for, if any. A portal link is
+  // a hard ceiling on report visibility (see reports.service.ts) — computed
+  // here, alongside permissions, since requirePermission already runs this
+  // query on every request; a second round-trip elsewhere would be wasteful.
+  portalClientId: string | null;
 }
 
 // Single source of truth for "what can this user do". Used by /me (to hand the
@@ -24,11 +29,12 @@ export async function getUserAccess(userId: string): Promise<UserAccess> {
         },
       },
       directPermissions: { select: { permission: { select: { key: true } } } },
+      clientProfile: { select: { id: true } },
     },
   });
 
   if (!user) {
-    return { roles: [], permissions: [] };
+    return { roles: [], permissions: [], portalClientId: null };
   }
 
   const permissionKeys = new Set<string>();
@@ -44,5 +50,6 @@ export async function getUserAccess(userId: string): Promise<UserAccess> {
   return {
     roles: user.roles.map(({ role }) => ({ id: role.id, name: role.name })),
     permissions: [...permissionKeys],
+    portalClientId: user.clientProfile?.id ?? null,
   };
 }

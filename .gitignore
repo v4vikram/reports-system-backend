@@ -2,3 +2,7 @@ node_modules/
 dist/
 .env
 *.log
+
+/src/generated/prisma
+
+/src/generated/prisma

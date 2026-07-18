@@ -12,7 +12,9 @@ import { notFoundHandler } from "./middleware/notFound.middlware.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { categoriesRouter } from "./modules/categories/categories.routes.js";
 import { clientsRouter } from "./modules/clients/clients.routes.js";
+import { eventsRouter } from "./modules/events/events.routes.js";
 import { permissionsRouter } from "./modules/permissions/permissions.routes.js";
+import { reportsRouter } from "./modules/reports/reports.routes.js";
 import { rolesRouter } from "./modules/roles/roles.routes.js";
 import { usersRouter } from "./modules/users/users.routes.js";
 
@@ -50,8 +52,8 @@ app.use("/api/roles", rolesRouter);
 app.use("/api/permissions", permissionsRouter);
 app.use("/api/clients", clientsRouter);
 app.use("/api/categories", categoriesRouter);
-// Further feature routes get mounted here as they're built, e.g.:
-// app.use("/api/reports", reportsRouter);
+app.use("/api/events", eventsRouter);
+app.use("/api/reports", reportsRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

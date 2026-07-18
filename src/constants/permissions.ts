@@ -20,6 +20,8 @@ export const PERMISSIONS = {
 
   REPORTS_CREATE: "reports:create",
   REPORTS_READ: "reports:read",
+  // Scope grant: see every report, not just ones you're assigned to.
+  REPORTS_READ_ALL: "reports:read-all",
   REPORTS_UPDATE: "reports:update",
   REPORTS_DELETE: "reports:delete",
 } as const;
@@ -44,19 +46,25 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
   { key: PERMISSIONS.CATEGORIES_READ, description: "View categories" },
   { key: PERMISSIONS.CATEGORIES_MANAGE, description: "Create, update, and delete categories" },
   { key: PERMISSIONS.REPORTS_CREATE, description: "Create reports" },
-  { key: PERMISSIONS.REPORTS_READ, description: "View reports" },
+  { key: PERMISSIONS.REPORTS_READ, description: "View reports assigned to you" },
+  { key: PERMISSIONS.REPORTS_READ_ALL, description: "View all reports (not just assigned)" },
   { key: PERMISSIONS.REPORTS_UPDATE, description: "Update reports" },
   { key: PERMISSIONS.REPORTS_DELETE, description: "Delete reports" },
 ];
 
 // System roles seeded at migration time. isSystem roles can't be deleted via
-// the API. Three roles: ADMIN (full), EMPLOYEE (scoped staff), CLIENT (external
+// the API. Three roles: ADMIN (full), EMPLOYEE (staff), CLIENT (external
 // report viewer).
 //
-// EMPLOYEE deliberately lacks clients:read-all, so an employee only ever sees
-// the clients ASSIGNED to them. To let a specific employee see ALL clients,
-// grant them clients:read-all as a direct permission (or via a custom role) —
-// the role is the scoped baseline, direct grants extend it.
+// Only ADMIN carries built-in permissions. EMPLOYEE and CLIENT are deliberately
+// seeded with ZERO permissions — a role here means "what kind of account this
+// is," not "what it can do." Creating an employee/client grants no module
+// access by default; an admin must explicitly grant permissions per user
+// (direct grants) or via a custom role (see the `roles` module) before they
+// can see or touch anything beyond the dashboard shell. Re-running the seed
+// resets EMPLOYEE/CLIENT back to empty, so don't rely on editing this array
+// as a way to grant standing access to every employee/client — use direct
+// grants or a custom role instead.
 export const SYSTEM_ROLES: { name: string; description: string; permissions: PermissionKey[] }[] = [
   {
     name: "ADMIN",
@@ -65,22 +73,13 @@ export const SYSTEM_ROLES: { name: string; description: string; permissions: Per
   },
   {
     name: "EMPLOYEE",
-    description: "Staff member — manages their assigned clients and reports",
-    permissions: [
-      PERMISSIONS.CLIENTS_READ,
-      PERMISSIONS.CLIENTS_CREATE,
-      PERMISSIONS.CLIENTS_UPDATE,
-      PERMISSIONS.CLIENTS_DELETE,
-      PERMISSIONS.CATEGORIES_READ,
-      PERMISSIONS.REPORTS_READ,
-      PERMISSIONS.REPORTS_CREATE,
-      PERMISSIONS.REPORTS_UPDATE,
-    ],
+    description: "Staff member — no access by default; permissions are granted individually",
+    permissions: [],
   },
   {
     name: "CLIENT",
-    description: "External client — can view reports only",
-    permissions: [PERMISSIONS.REPORTS_READ],
+    description: "External client — no access by default; permissions are granted individually",
+    permissions: [],
   },
 ];
 
