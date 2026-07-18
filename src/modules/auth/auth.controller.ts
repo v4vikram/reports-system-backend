@@ -35,6 +35,7 @@ async function toAuthUser(user: BasicUser) {
     email: user.email,
     roles: access.roles,
     permissions: access.permissions,
+    portalClientId: access.portalClientId,
   };
 }
 
