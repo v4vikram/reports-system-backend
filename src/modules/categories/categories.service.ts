@@ -73,6 +73,15 @@ export async function updateCategory(id: string, input: UpdateCategoryInput) {
 export async function deleteCategory(id: string) {
   const existing = await prisma.category.findUnique({ where: { id } });
   if (!existing) throw new ApiError(HttpStatus.NOT_FOUND, "Category not found");
+
+  // reports.categoryId is onDelete: Restrict — the DB would reject this with
+  // a raw constraint error errorHandler.middlware.ts doesn't translate into a
+  // friendly message, so pre-check and give a clear reason instead.
+  const reportCount = await prisma.report.count({ where: { categoryId: id } });
+  if (reportCount > 0) {
+    throw new ApiError(HttpStatus.CONFLICT, "Cannot delete a category with reports attached");
+  }
+
   // Children are detached (parentId set null) via the schema relation.
   await prisma.category.delete({ where: { id } });
 }
