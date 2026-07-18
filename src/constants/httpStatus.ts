@@ -1,3 +1,4 @@
+// Named HTTP status codes so routes/services never hardcode a magic number.
 export const HttpStatus = {
   OK: 200,
   CREATED: 201,
@@ -12,4 +13,4 @@ export const HttpStatus = {
   INTERNAL_SERVER_ERROR: 500,
 } as const;
 
-export type HttpStatus = (typeof HttpStatus)[keyof typeof HttpStatus];
+export type HttpStatusCode = (typeof HttpStatus)[keyof typeof HttpStatus];

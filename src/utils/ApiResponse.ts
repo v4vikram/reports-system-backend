@@ -1,18 +1,16 @@
-import type { Response } from "express";
-import { SuccessMessages } from "../constants/index.js";
+import type { HttpStatusCode } from "../constants/httpStatus.js";
 
+// Single response envelope used for every JSON success reply, so clients can
+// rely on the same { success, statusCode, message, data } shape everywhere.
+// ApiError + the error handler produce the same shape for failures.
 export class ApiResponse<T = unknown> {
-  constructor(
-    public status: number,
-    public data: T,
-    public message: string = SuccessMessages.SUCCESS
-  ) {}
+  public readonly success: boolean;
 
-  send(res: Response) {
-    res.status(this.status).json({
-      success: true,
-      message: this.message,
-      data: this.data,
-    });
+  constructor(
+    public readonly statusCode: HttpStatusCode,
+    public readonly data: T,
+    public readonly message: string = "Success"
+  ) {
+    this.success = statusCode < 400;
   }
 }

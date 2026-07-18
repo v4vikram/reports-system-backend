@@ -1,88 +1,111 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
-import { PERMISSIONS } from "../src/constants/permissions.js";
+import bcrypt from "bcrypt";
+import {
+  PERMISSION_CATALOG,
+  RETIRED_SYSTEM_ROLES,
+  SYSTEM_ROLES,
+} from "../src/constants/permissions.js";
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
-async function main() {
-  const permissionKeys = Object.values(PERMISSIONS);
+const ADMIN_EMAIL = "v4vikram.dev@gmail.com";
 
-  // Keeps the DB's permission catalog in sync with the code-defined one —
-  // a key removed/renamed here (e.g. the users:manage/clients:manage split)
-  // stops being just an addition and actually disappears, along with any
-  // RolePermission/UserPermission grants that pointed at it (cascade).
-  const pruned = await prisma.permission.deleteMany({
-    where: { key: { notIn: permissionKeys } },
-  });
-  if (pruned.count > 0) {
-    console.log(`Pruned ${pruned.count} stale permission(s) no longer in the catalog.`);
+async function main() {
+  // 1. Permissions catalog (idempotent upsert by key).
+  for (const perm of PERMISSION_CATALOG) {
+    await prisma.permission.upsert({
+      where: { key: perm.key },
+      update: { description: perm.description },
+      create: { key: perm.key, description: perm.description },
+    });
+  }
+  console.log(`Seeded ${PERMISSION_CATALOG.length} permissions`);
+
+  // 2. System roles + their permission sets.
+  for (const roleDef of SYSTEM_ROLES) {
+    const role = await prisma.role.upsert({
+      where: { name: roleDef.name },
+      update: { description: roleDef.description, isSystem: true },
+      create: { name: roleDef.name, description: roleDef.description, isSystem: true },
+    });
+
+    const permissions = await prisma.permission.findMany({
+      where: { key: { in: roleDef.permissions } },
+      select: { id: true },
+    });
+
+    // Reset the role's permission set to exactly what the catalog declares.
+    await prisma.$transaction([
+      prisma.rolePermission.deleteMany({ where: { roleId: role.id } }),
+      prisma.rolePermission.createMany({
+        data: permissions.map((p) => ({ roleId: role.id, permissionId: p.id })),
+      }),
+    ]);
+  }
+  console.log(`Seeded ${SYSTEM_ROLES.length} system roles: ${SYSTEM_ROLES.map((r) => r.name).join(", ")}`);
+
+  // 2b. Migrate users off any retired system roles, then delete those roles.
+  for (const retired of RETIRED_SYSTEM_ROLES) {
+    const oldRole = await prisma.role.findUnique({ where: { name: retired.name } });
+    if (!oldRole) continue;
+
+    const replacement = await prisma.role.findUnique({ where: { name: retired.replacement } });
+    if (replacement) {
+      const memberships = await prisma.userRole.findMany({ where: { roleId: oldRole.id } });
+      for (const m of memberships) {
+        await prisma.userRole.upsert({
+          where: { userId_roleId: { userId: m.userId, roleId: replacement.id } },
+          update: {},
+          create: { userId: m.userId, roleId: replacement.id },
+        });
+      }
+      if (memberships.length > 0) {
+        console.log(
+          `Migrated ${memberships.length} user(s) from ${retired.name} to ${retired.replacement}`
+        );
+      }
+    }
+
+    // UserRole/RolePermission rows cascade on role delete.
+    await prisma.role.delete({ where: { id: oldRole.id } });
+    console.log(`Removed retired role: ${retired.name}`);
   }
 
-  await Promise.all(
-    permissionKeys.map((key) =>
-      prisma.permission.upsert({
-        where: { key },
-        update: {},
-        create: { key },
-      })
-    )
-  );
+  // 3. Admin user. Existing admin's password/status is never overwritten by
+  //    re-seeding (update: {}), so this is safe to run repeatedly.
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  if (!adminPassword) {
+    throw new Error(
+      "SEED_ADMIN_PASSWORD is not set. Add it to backend/.env before seeding the admin user."
+    );
+  }
 
-  const adminRole = await prisma.role.upsert({
-    where: { name: "Admin" },
+  const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: "ADMIN" } });
+  const passwordHash = await bcrypt.hash(adminPassword, 12);
+
+  const admin = await prisma.user.upsert({
+    where: { email: ADMIN_EMAIL },
     update: {},
     create: {
-      name: "Admin",
-      description: "Full access to all permissions. Cannot be deleted.",
-      isSystem: true,
+      name: "Vikram",
+      email: ADMIN_EMAIL,
+      passwordHash,
+      status: "ACTIVE",
+      emailVerifiedAt: new Date(),
     },
   });
 
-  const permissions = await prisma.permission.findMany({
-    where: { key: { in: permissionKeys } },
+  // Ensure the admin has the ADMIN role (idempotent).
+  await prisma.userRole.upsert({
+    where: { userId_roleId: { userId: admin.id, roleId: adminRole.id } },
+    update: {},
+    create: { userId: admin.id, roleId: adminRole.id },
   });
 
-  await Promise.all(
-    permissions.map((permission) =>
-      prisma.rolePermission.upsert({
-        where: {
-          roleId_permissionId: { roleId: adminRole.id, permissionId: permission.id },
-        },
-        update: {},
-        create: { roleId: adminRole.id, permissionId: permission.id },
-      })
-    )
-  );
-
-  console.log(
-    `Seeded ${permissionKeys.length} permission(s) and the "Admin" role with full access.`
-  );
-
-  // Change SEED_ADMIN_EMAIL in .env and re-run this seed to promote a
-  // different (already-registered) account instead — no code change needed.
-  const adminEmail = process.env.SEED_ADMIN_EMAIL;
-
-  if (!adminEmail) {
-    console.log("SEED_ADMIN_EMAIL not set — skipping admin assignment.");
-  } else {
-    const adminUser = await prisma.user.findUnique({ where: { email: adminEmail } });
-
-    if (!adminUser) {
-      console.warn(
-        `No user found with email "${adminEmail}" — skipping admin assignment. ` +
-          "Register that account first, then re-run this seed."
-      );
-    } else {
-      await prisma.userRole.upsert({
-        where: { userId_roleId: { userId: adminUser.id, roleId: adminRole.id } },
-        update: {},
-        create: { userId: adminUser.id, roleId: adminRole.id },
-      });
-      console.log(`Assigned the "Admin" role to ${adminEmail}.`);
-    }
-  }
+  console.log(`Seeded admin user: ${admin.email}`);
 }
 
 main()

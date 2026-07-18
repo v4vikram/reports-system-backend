@@ -2,19 +2,19 @@ import compression from "compression";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
+import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import { pinoHttp } from "pino-http";
 import { env } from "./config/env.js";
 import { logger } from "./lib/logger.js";
 import { errorHandler } from "./middleware/errorHandler.middlware.js";
 import { notFoundHandler } from "./middleware/notFound.middlware.js";
-import { apiRateLimiter } from "./middleware/rateLimiter.middlware.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
-import { categoryRouter } from "./modules/category/category.routes.js";
-import { clientRouter } from "./modules/client/client.routes.js";
-import { permissionRouter } from "./modules/user/permission.routes.js";
-import { roleRouter } from "./modules/user/role.routes.js";
-import { userRouter } from "./modules/user/user.routes.js";
+import { categoriesRouter } from "./modules/categories/categories.routes.js";
+import { clientsRouter } from "./modules/clients/clients.routes.js";
+import { permissionsRouter } from "./modules/permissions/permissions.routes.js";
+import { rolesRouter } from "./modules/roles/roles.routes.js";
+import { usersRouter } from "./modules/users/users.routes.js";
 
 export const app = express();
 
@@ -31,19 +31,25 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(pinoHttp({ logger }));
 
-app.use(apiRateLimiter);
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", env: env.NODE_ENV });
 });
 
 app.use("/api/auth", authRouter);
-app.use("/api/categories", categoryRouter);
-app.use("/api/users", userRouter);
-app.use("/api/roles", roleRouter);
-app.use("/api/permissions", permissionRouter);
-app.use("/api/clients", clientRouter);
-
+app.use("/api/users", usersRouter);
+app.use("/api/roles", rolesRouter);
+app.use("/api/permissions", permissionsRouter);
+app.use("/api/clients", clientsRouter);
+app.use("/api/categories", categoriesRouter);
 // Further feature routes get mounted here as they're built, e.g.:
 // app.use("/api/reports", reportsRouter);
 

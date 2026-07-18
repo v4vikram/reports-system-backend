@@ -1,80 +1,109 @@
-import type { Request, Response } from "express";
-import {
-  ACCESS_TOKEN_COOKIE,
-  REFRESH_TOKEN_COOKIE,
-  getAccessTokenCookieOptions,
-  getClearCookieOptions,
-  getRefreshTokenCookieOptions,
-} from "../../constants/cookies.js";
-import { ErrorMessages, HttpStatus, SuccessMessages } from "../../constants/index.js";
+import type { CookieOptions, Request, Response } from "express";
+import { env } from "../../config/env.js";
+import { HttpStatus } from "../../constants/httpStatus.js";
+import { getUserAccess } from "../../lib/access.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
-import { asyncHandler } from "../../utils/asyncHandler.js";
 import * as authService from "./auth.service.js";
+import type { BasicUser, LoginInput, RegisterInput, RequestContext } from "./auth.types.js";
 
-function sessionMeta(req: Request) {
-  return { userAgent: req.get("user-agent"), ipAddress: req.ip };
+const ACCESS_COOKIE = "accessToken";
+const REFRESH_COOKIE = "refreshToken";
+
+const baseCookieOptions: CookieOptions = {
+  httpOnly: true,
+  secure: env.NODE_ENV === "production",
+  sameSite: "lax",
+};
+
+// Refresh cookie is scoped to /api/auth — it's only ever needed by the
+// refresh/logout endpoints, so it isn't sent on every unrelated request.
+const refreshCookieOptions: CookieOptions = { ...baseCookieOptions, path: "/api/auth" };
+const accessCookieOptions: CookieOptions = { ...baseCookieOptions, path: "/" };
+
+function requestContext(req: Request): RequestContext {
+  return { ip: req.ip, userAgent: req.get("user-agent") };
+}
+
+// The AuthUser contract the frontend expects: identity + roles + the effective
+// (role ∪ direct) permission keys used for client-side capability checks.
+async function toAuthUser(user: BasicUser) {
+  const access = await getUserAccess(user.id);
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    roles: access.roles,
+    permissions: access.permissions,
+  };
 }
 
 function setSessionCookies(res: Response, tokens: { accessToken: string; refreshToken: string }) {
-  res.cookie(ACCESS_TOKEN_COOKIE, tokens.accessToken, getAccessTokenCookieOptions());
-  res.cookie(REFRESH_TOKEN_COOKIE, tokens.refreshToken, getRefreshTokenCookieOptions());
+  res.cookie(ACCESS_COOKIE, tokens.accessToken, accessCookieOptions);
+  res.cookie(REFRESH_COOKIE, tokens.refreshToken, refreshCookieOptions);
 }
 
-export const register = asyncHandler(async (req, res) => {
-  const authUser = await authService.registerUser(req.body);
-  const tokens = await authService.issueSession(
-    { id: authUser.id, email: authUser.email },
-    sessionMeta(req)
-  );
-  setSessionCookies(res, tokens);
-  new ApiResponse(HttpStatus.CREATED, { user: authUser }, SuccessMessages.CREATED).send(res);
-});
+export async function register(req: Request, res: Response) {
+  const { user, tokens } = await authService.registerUser(req.body as RegisterInput, requestContext(req));
 
-export const login = asyncHandler(async (req, res) => {
-  const authUser = await authService.verifyCredentials(req.body);
-  const tokens = await authService.issueSession(
-    { id: authUser.id, email: authUser.email },
-    sessionMeta(req)
-  );
   setSessionCookies(res, tokens);
-  new ApiResponse(HttpStatus.OK, { user: authUser }, SuccessMessages.SUCCESS).send(res);
-});
+  res
+    .status(HttpStatus.CREATED)
+    .json(
+      new ApiResponse(
+        HttpStatus.CREATED,
+        { user: await toAuthUser(user), accessToken: tokens.accessToken },
+        "Registered successfully"
+      )
+    );
+}
 
-export const refresh = asyncHandler(async (req, res) => {
-  const rawToken = req.cookies[REFRESH_TOKEN_COOKIE];
-  if (!rawToken) {
-    throw new ApiError(HttpStatus.UNAUTHORIZED, ErrorMessages.UNAUTHORIZED);
+export async function login(req: Request, res: Response) {
+  const { user, tokens } = await authService.loginUser(req.body as LoginInput, requestContext(req));
+
+  setSessionCookies(res, tokens);
+  res
+    .status(HttpStatus.OK)
+    .json(
+      new ApiResponse(
+        HttpStatus.OK,
+        { user: await toAuthUser(user), accessToken: tokens.accessToken },
+        "Logged in successfully"
+      )
+    );
+}
+
+export async function refresh(req: Request, res: Response) {
+  const rawRefreshToken = req.cookies?.[REFRESH_COOKIE];
+  if (!rawRefreshToken) {
+    throw new ApiError(HttpStatus.UNAUTHORIZED, "No refresh token provided");
   }
 
-  const { accessToken, refreshToken, authUser } = await authService.rotateRefreshToken(
-    rawToken,
-    sessionMeta(req)
-  );
-  setSessionCookies(res, { accessToken, refreshToken });
-  new ApiResponse(HttpStatus.OK, { user: authUser }, SuccessMessages.SUCCESS).send(res);
-});
+  const { user, tokens } = await authService.refreshSession(rawRefreshToken, requestContext(req));
 
-export const logout = asyncHandler(async (req, res) => {
-  const rawToken = req.cookies[REFRESH_TOKEN_COOKIE];
-  if (rawToken) {
-    await authService.revokeRefreshToken(rawToken);
-  }
-  res.clearCookie(ACCESS_TOKEN_COOKIE, getClearCookieOptions());
-  res.clearCookie(REFRESH_TOKEN_COOKIE, getClearCookieOptions());
-  new ApiResponse(HttpStatus.OK, null, SuccessMessages.SUCCESS).send(res);
-});
+  setSessionCookies(res, tokens);
+  res
+    .status(HttpStatus.OK)
+    .json(
+      new ApiResponse(
+        HttpStatus.OK,
+        { user: await toAuthUser(user), accessToken: tokens.accessToken },
+        "Session refreshed"
+      )
+    );
+}
 
-export const me = asyncHandler(async (req, res) => {
-  new ApiResponse(HttpStatus.OK, req.user, SuccessMessages.FETCHED).send(res);
-});
+export async function logout(req: Request, res: Response) {
+  const rawRefreshToken = req.cookies?.[REFRESH_COOKIE];
+  await authService.logoutUser(rawRefreshToken, requestContext(req));
 
-export const forgotPassword = asyncHandler(async (req, res) => {
-  await authService.requestPasswordReset(req.body.email);
-  new ApiResponse(HttpStatus.OK, null, SuccessMessages.PASSWORD_RESET_EMAIL_SENT).send(res);
-});
+  res.clearCookie(ACCESS_COOKIE, { path: "/" });
+  res.clearCookie(REFRESH_COOKIE, { path: "/api/auth" });
+  res.status(HttpStatus.NO_CONTENT).send();
+}
 
-export const resetPassword = asyncHandler(async (req, res) => {
-  await authService.resetPassword(req.body);
-  new ApiResponse(HttpStatus.OK, null, SuccessMessages.PASSWORD_RESET_SUCCESS).send(res);
-});
+export async function me(req: Request, res: Response) {
+  const user = await authService.getUserById(req.user!.id);
+  // Frontend getMe expects the user object directly as `data` (not wrapped).
+  res.status(HttpStatus.OK).json(new ApiResponse(HttpStatus.OK, await toAuthUser(user), "Current user fetched"));
+}

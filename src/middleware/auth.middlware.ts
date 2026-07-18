@@ -1,58 +1,64 @@
 import type { NextFunction, Request, Response } from "express";
-import { jwtVerify } from "jose";
-import { env } from "../config/env.js";
-import { ACCESS_TOKEN_COOKIE } from "../constants/cookies.js";
-import { ErrorMessages, HttpStatus } from "../constants/index.js";
-import { getAuthUserById } from "../modules/auth/auth.service.js";
+import { HttpStatus } from "../constants/httpStatus.js";
+import { getUserAccess } from "../lib/access.js";
+import { verifyAccessToken } from "../lib/token.js";
 import { ApiError } from "../utils/ApiError.js";
-import { asyncHandler } from "../utils/asyncHandler.js";
 
-const ACCESS_SECRET = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
+export function requireAuth(req: Request, _res: Response, next: NextFunction) {
+  const header = req.headers.authorization;
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : req.cookies?.accessToken;
 
-// Verifies identity from the access token, then re-loads the user's current
-// roles/permissions from the DB on every request — never trusts a cached
-// claim. See docs/architecture/erd.md#auth-module ("Authorization freshness").
-export const requireAuth = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
-  const token = req.cookies[ACCESS_TOKEN_COOKIE];
   if (!token) {
-    throw new ApiError(HttpStatus.UNAUTHORIZED, ErrorMessages.UNAUTHORIZED);
+    next(new ApiError(HttpStatus.UNAUTHORIZED, "Authentication required"));
+    return;
   }
 
-  let subject: string | undefined;
   try {
-    ({
-      payload: { sub: subject },
-    } = await jwtVerify(token, ACCESS_SECRET));
-  } catch {
-    throw new ApiError(HttpStatus.UNAUTHORIZED, ErrorMessages.UNAUTHORIZED);
-  }
-
-  const user = subject ? await getAuthUserById(subject) : null;
-  if (!user) {
-    throw new ApiError(HttpStatus.UNAUTHORIZED, ErrorMessages.UNAUTHORIZED);
-  }
-
-  req.user = user;
-  next();
-});
-
-export function requirePermission(permission: string) {
-  return (req: Request, _res: Response, next: NextFunction) => {
-    if (!req.user?.permissions.includes(permission)) {
-      throw new ApiError(HttpStatus.FORBIDDEN, ErrorMessages.FORBIDDEN);
-    }
+    const payload = verifyAccessToken(token);
+    req.user = { id: payload.sub };
     next();
+  } catch {
+    next(new ApiError(HttpStatus.UNAUTHORIZED, "Invalid or expired token"));
+  }
+}
+
+// Authorizes on effective permissions loaded fresh from the DB, so a
+// permission change takes effect immediately rather than waiting for the
+// access token to expire. Holding ANY of the listed keys passes.
+export function requirePermission(...keys: string[]) {
+  return async (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.user) {
+      next(new ApiError(HttpStatus.UNAUTHORIZED, "Authentication required"));
+      return;
+    }
+    try {
+      const { permissions } = await getUserAccess(req.user.id);
+      if (!keys.some((key) => permissions.includes(key))) {
+        next(new ApiError(HttpStatus.FORBIDDEN, "Insufficient permissions"));
+        return;
+      }
+      next();
+    } catch (err) {
+      next(err);
+    }
   };
 }
 
-// For routes where holding any one of several permissions is enough — e.g.
-// viewing the employee directory requires *some* users:* capability, not
-// one specific permission.
-export function requireAnyPermission(permissions: string[]) {
-  return (req: Request, _res: Response, next: NextFunction) => {
-    if (!permissions.some((permission) => req.user?.permissions.includes(permission))) {
-      throw new ApiError(HttpStatus.FORBIDDEN, ErrorMessages.FORBIDDEN);
+export function requireRole(...roleNames: string[]) {
+  return async (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.user) {
+      next(new ApiError(HttpStatus.UNAUTHORIZED, "Authentication required"));
+      return;
     }
-    next();
+    try {
+      const { roles } = await getUserAccess(req.user.id);
+      if (!roles.some((role) => roleNames.includes(role.name))) {
+        next(new ApiError(HttpStatus.FORBIDDEN, "Insufficient permissions"));
+        return;
+      }
+      next();
+    } catch (err) {
+      next(err);
+    }
   };
 }

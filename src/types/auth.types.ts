@@ -1,18 +1,17 @@
-export interface Role {
-  id: string;
-  name: string;
-}
+// Cross-cutting auth types — shared by lib/token.ts and every module's
+// middleware/controllers via req.user. Module-local types (DTOs, request
+// context, etc.) belong in that module's own <name>.types.ts instead.
 
 export interface AuthUser {
   id: string;
-  name: string;
-  email: string;
-  roles: Role[];
-  permissions: string[];
 }
 
-export interface JwtPayload {
+export interface AccessTokenPayload {
   sub: string;
-  email: string;
-  role?: string;
+}
+
+declare module "express-serve-static-core" {
+  interface Request {
+    user?: AuthUser;
+  }
 }
