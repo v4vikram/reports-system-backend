@@ -9,6 +9,12 @@ import { env } from "./config/env.js";
 import { logger } from "./lib/logger.js";
 import { errorHandler } from "./middleware/errorHandler.middlware.js";
 import { notFoundHandler } from "./middleware/notFound.middlware.js";
+import { authRouter } from "./modules/auth/auth.routes.js";
+import { categoriesRouter } from "./modules/categories/categories.routes.js";
+import { clientsRouter } from "./modules/clients/clients.routes.js";
+import { permissionsRouter } from "./modules/permissions/permissions.routes.js";
+import { rolesRouter } from "./modules/roles/roles.routes.js";
+import { usersRouter } from "./modules/users/users.routes.js";
 
 export const app = express();
 
@@ -38,7 +44,13 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", env: env.NODE_ENV });
 });
 
-// Feature routes get mounted here as they're built, e.g.:
+app.use("/api/auth", authRouter);
+app.use("/api/users", usersRouter);
+app.use("/api/roles", rolesRouter);
+app.use("/api/permissions", permissionsRouter);
+app.use("/api/clients", clientsRouter);
+app.use("/api/categories", categoriesRouter);
+// Further feature routes get mounted here as they're built, e.g.:
 // app.use("/api/reports", reportsRouter);
 
 app.use(notFoundHandler);
