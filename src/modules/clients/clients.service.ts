@@ -42,6 +42,15 @@ async function assertPortalUserValid(portalUserId: string | null | undefined, ex
   }
 }
 
+// The Prisma where-clause for "clients this actor may see" — exported so
+// events.service.ts can reuse it unchanged for a cross-client events list
+// (`client: clientOwnershipWhere(actor)` as a relation filter).
+export function clientOwnershipWhere(actor: ClientActor) {
+  return actor.canReadAll
+    ? {}
+    : { OR: [{ assignedUserId: actor.userId }, { portalUserId: actor.userId }] };
+}
+
 // Loads a client and enforces record-level access: a scoped user may only
 // touch clients assigned to them (as the responsible employee) or that
 // they're the portal login for. Exported for reuse by events/reports, whose
@@ -60,9 +69,7 @@ export async function getOwnedClient(id: string, actor: ClientActor) {
 
 export function listClients(actor: ClientActor) {
   return prisma.client.findMany({
-    where: actor.canReadAll
-      ? {}
-      : { OR: [{ assignedUserId: actor.userId }, { portalUserId: actor.userId }] },
+    where: clientOwnershipWhere(actor),
     orderBy: { createdAt: "desc" },
   });
 }

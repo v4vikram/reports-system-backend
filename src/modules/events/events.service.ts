@@ -1,7 +1,7 @@
 import { HttpStatus } from "../../constants/httpStatus.js";
 import { prisma } from "../../lib/prisma.js";
 import { ApiError } from "../../utils/ApiError.js";
-import { getOwnedClient } from "../clients/clients.service.js";
+import { clientOwnershipWhere, getOwnedClient } from "../clients/clients.service.js";
 import type { ClientActor } from "../clients/clients.service.js";
 import type { CreateEventInput, UpdateEventInput } from "./events.types.js";
 
@@ -15,9 +15,19 @@ async function getOwnedEvent(id: string, actor: ClientActor) {
   return event;
 }
 
-export async function listEvents(clientId: string, actor: ClientActor) {
-  await getOwnedClient(clientId, actor);
-  return prisma.event.findMany({ where: { clientId }, orderBy: { createdAt: "desc" } });
+// clientId omitted lists events across every client the actor can see (the
+// flat /dashboard/events page); given, it's scoped to just that one client
+// (the per-client detail page) — same ownership rule either way, just
+// applied directly vs. via the client relation.
+export async function listEvents(clientId: string | undefined, actor: ClientActor) {
+  if (clientId) {
+    await getOwnedClient(clientId, actor);
+    return prisma.event.findMany({ where: { clientId }, orderBy: { createdAt: "desc" } });
+  }
+  return prisma.event.findMany({
+    where: { client: clientOwnershipWhere(actor) },
+    orderBy: { createdAt: "desc" },
+  });
 }
 
 export async function getEvent(id: string, actor: ClientActor) {

@@ -16,5 +16,5 @@ export const updateEventSchema = createEventSchema
   .extend({ isActive: z.boolean().optional() });
 
 export const eventsQuerySchema = z.object({
-  clientId: z.string().min(1),
+  clientId: z.string().min(1).optional(),
 });
