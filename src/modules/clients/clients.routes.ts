@@ -12,6 +12,12 @@ clientsRouter.use(requireAuth);
 
 clientsRouter.get("/", requirePermission(PERMISSIONS.CLIENTS_READ), asyncHandler(controller.list));
 
+clientsRouter.get(
+  "/:id",
+  requirePermission(PERMISSIONS.CLIENTS_READ),
+  asyncHandler(controller.getById)
+);
+
 clientsRouter.post(
   "/",
   requirePermission(PERMISSIONS.CLIENTS_CREATE),

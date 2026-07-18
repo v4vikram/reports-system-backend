@@ -10,6 +10,7 @@ export const createClientSchema = z.object({
   address: z.string().max(500).nullable().default(null),
   notes: z.string().max(2000).nullable().default(null),
   assignedUserId: z.string().min(1).nullable().default(null),
+  portalUserId: z.string().min(1).nullable().default(null),
 });
 
 export const updateClientSchema = createClientSchema.partial().extend({
