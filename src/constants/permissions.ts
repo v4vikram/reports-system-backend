@@ -1,7 +1,10 @@
 // The full catalog of permission keys the system knows about. Seeded into the
 // `permissions` table (see prisma/seed.ts) and used by requirePermission().
-// Format: "<resource>:<action>". The frontend mirrors the subset it needs in
-// each feature's constants.ts — keep the keys identical.
+// Format: "<resource>:<action>". After editing this file, run
+// `npm run sync:permissions` to regenerate frontend/src/lib/generated/permissions.ts
+// — each feature's constants.ts imports its subset from there instead of
+// re-declaring string literals, so a rename/removal here fails the frontend
+// build instead of silently leaving a stale permission check.
 export const PERMISSIONS = {
   USERS_CREATE: "users:create",
   USERS_READ: "users:read",

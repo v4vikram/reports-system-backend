@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { PERMISSIONS } from "../../constants/permissions.js";
 import { requireAuth, requirePermission } from "../../middleware/auth.middlware.js";
+import { perUserRateLimit } from "../../middleware/rateLimit.middlware.js";
 import { validate } from "../../middleware/validate.middlware.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import * as controller from "./users.controller.js";
@@ -14,7 +15,7 @@ import {
 export const usersRouter = Router();
 
 // Everything here requires a logged-in user with the relevant users:* grant.
-usersRouter.use(requireAuth);
+usersRouter.use(requireAuth, perUserRateLimit);
 
 usersRouter.get("/", requirePermission(PERMISSIONS.USERS_READ), asyncHandler(controller.list));
 

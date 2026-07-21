@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { PERMISSIONS } from "../../constants/permissions.js";
 import { requireAuth, requirePermission } from "../../middleware/auth.middlware.js";
+import { perUserRateLimit } from "../../middleware/rateLimit.middlware.js";
 import { validate } from "../../middleware/validate.middlware.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import * as controller from "./reports.controller.js";
@@ -8,7 +9,7 @@ import { createReportSchema, reportsQuerySchema, updateReportSchema } from "./re
 
 export const reportsRouter = Router();
 
-reportsRouter.use(requireAuth);
+reportsRouter.use(requireAuth, perUserRateLimit);
 
 // Deliberately OR'd (unlike clients.routes.ts's list gate, which only checks
 // the base *_READ key) so holding only reports:read-all doesn't 403 at the

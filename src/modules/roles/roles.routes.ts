@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { PERMISSIONS } from "../../constants/permissions.js";
 import { requireAuth, requirePermission } from "../../middleware/auth.middlware.js";
+import { perUserRateLimit } from "../../middleware/rateLimit.middlware.js";
 import { validate } from "../../middleware/validate.middlware.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import * as controller from "./roles.controller.js";
@@ -8,7 +9,7 @@ import { createRoleSchema } from "./roles.validation.js";
 
 export const rolesRouter = Router();
 
-rolesRouter.use(requireAuth);
+rolesRouter.use(requireAuth, perUserRateLimit);
 
 rolesRouter.get(
   "/",

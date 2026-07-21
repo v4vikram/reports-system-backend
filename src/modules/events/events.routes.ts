@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { PERMISSIONS } from "../../constants/permissions.js";
 import { requireAuth, requirePermission } from "../../middleware/auth.middlware.js";
+import { perUserRateLimit } from "../../middleware/rateLimit.middlware.js";
 import { validate } from "../../middleware/validate.middlware.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import * as controller from "./events.controller.js";
@@ -8,7 +9,7 @@ import { createEventSchema, eventsQuerySchema, updateEventSchema } from "./event
 
 export const eventsRouter = Router();
 
-eventsRouter.use(requireAuth);
+eventsRouter.use(requireAuth, perUserRateLimit);
 
 // Events carry no permission keys of their own — every route here gates on
 // the same clients:* permission that would let the actor manage the parent
