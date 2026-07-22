@@ -61,8 +61,10 @@ async function assertUsersExist(userIds: string[]) {
 
 // Loads a report and enforces record-level access via reportsWhere — a
 // scoped actor gets the same 404-not-403 treatment as clients, so they can't
-// probe for ids outside their visibility.
-async function getVisibleReport(id: string, actor: ReportActor) {
+// probe for ids outside their visibility. Exported: Sections/CoverageTables/
+// CoverageRows are sub-resources of a report and reuse this verbatim to
+// check "can this actor see the report behind this section/table/row."
+export async function getOwnedReport(id: string, actor: ReportActor) {
   const report = await prisma.report.findFirst({
     where: { id, ...reportsWhere(actor) },
     include: reportInclude,
@@ -85,7 +87,7 @@ export async function listReports(query: ReportsQuery, actor: ReportActor): Prom
 }
 
 export async function getReport(id: string, actor: ReportActor): Promise<ReportDto> {
-  return toReportDto(await getVisibleReport(id, actor));
+  return toReportDto(await getOwnedReport(id, actor));
 }
 
 export async function createReport(
@@ -121,7 +123,7 @@ export async function updateReport(
   input: UpdateReportInput,
   actor: ReportActor
 ): Promise<ReportDto> {
-  await getVisibleReport(id, actor);
+  await getOwnedReport(id, actor);
 
   if (input.categoryId !== undefined) await assertCategoryExists(input.categoryId);
   if (input.assigneeUserIds !== undefined) await assertUsersExist(input.assigneeUserIds);
@@ -148,6 +150,6 @@ export async function updateReport(
 }
 
 export async function deleteReport(id: string, actor: ReportActor): Promise<void> {
-  await getVisibleReport(id, actor);
+  await getOwnedReport(id, actor);
   await prisma.report.delete({ where: { id } });
 }

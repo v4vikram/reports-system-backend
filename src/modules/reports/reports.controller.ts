@@ -8,7 +8,9 @@ import * as reportsService from "./reports.service.js";
 import type { ReportActor } from "./reports.service.js";
 import type { CreateReportInput, ReportsQuery, UpdateReportInput } from "./reports.types.js";
 
-async function getReportActor(req: Request): Promise<ReportActor> {
+// Exported so Sections/CoverageTables/CoverageRows controllers (sub-resources
+// of a report) can build the same actor without re-deriving it.
+export async function getReportActor(req: Request): Promise<ReportActor> {
   const access = await getUserAccess(req.user!.id);
   return {
     userId: req.user!.id,

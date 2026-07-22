@@ -260,11 +260,81 @@ model Report {
   updatedAt DateTime @updatedAt
 
   assignees ReportAssignee[]
+  sections  Section[]
 
   @@index([clientId])
   @@index([eventId])
   @@index([categoryId])
   @@map("reports")
+}
+
+// ---- Module 6: Report content — Sections & Coverage Tables ----
+// Sub-resources of Report; carry no permission keys of their own (same
+// pattern as Event under Client) — access inherits whatever the actor's
+// reports:* grants already resolve for the parent report.
+
+model Section {
+  id        String   @id @default(cuid())
+  reportId  String
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tables CoverageTable[]
+
+  @@index([reportId])
+  @@map("sections")
+}
+
+model CoverageTable {
+  id        String  @id @default(cuid())
+  sectionId String
+  section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  // Free-text media-type label ("TV", "Print", "Online", ...) for how this
+  // table groups its clippings — distinct from Report.categoryId's taxonomy.
+  category String?
+  order    Int     @default(0)
+  // Column keys hidden from this table's display. Validated against a fixed
+  // enum at the API boundary (coverage-tables.validation.ts) — a plain
+  // string array with no such check would let a typo silently no-op.
+  hiddenColumns String[] @default([])
+  // Gallery of supporting screenshots: {url, caption, order}[]. A JSON
+  // column, not its own table — unlike rows, screenshots have no independent
+  // lifecycle or query need beyond "the list attached to this table."
+  screenshots Json @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rows CoverageRow[]
+
+  @@index([sectionId])
+  @@map("coverage_tables")
+}
+
+model CoverageRow {
+  id              String        @id @default(cuid())
+  coverageTableId String
+  coverageTable   CoverageTable @relation(fields: [coverageTableId], references: [id], onDelete: Cascade)
+  srNo            Int           @default(0)
+  headline        String?
+  publication     String?
+  edition         String?
+  // Kept as a string, not Int — real page references include ranges and
+  // labels ("3-4", "Front Page"), not just plain integers.
+  pageNo        String?
+  date          DateTime?
+  link          String?
+  image         String?
+  isTopCoverage Boolean   @default(false)
+  order         Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([coverageTableId])
+  @@map("coverage_rows")
 }
 
 // M2M: which employees are assigned to a report.
