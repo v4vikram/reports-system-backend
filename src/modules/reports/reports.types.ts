@@ -5,6 +5,11 @@ export type CreateReportInput = z.infer<typeof createReportSchema>;
 export type UpdateReportInput = z.infer<typeof updateReportSchema>;
 export type ReportsQuery = z.infer<typeof reportsQuerySchema>;
 
+export interface CoverPage {
+  content: string | null;
+  image: string | null;
+}
+
 export interface ReportDto {
   id: string;
   title: string;
@@ -12,6 +17,7 @@ export interface ReportDto {
   clientId: string;
   eventId: string;
   categoryId: string;
+  coverPages: CoverPage[];
   createdAt: Date;
   updatedAt: Date;
   // Resolved {id,name} pairs, not flat ids — a portal-linked CLIENT viewer is

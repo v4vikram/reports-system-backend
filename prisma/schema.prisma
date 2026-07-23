@@ -244,6 +244,11 @@ model Report {
   id      String  @id @default(cuid())
   title   String
   content String?
+  // Ordered cover/intro pages preceding the sections: {content, image}[].
+  // A JSON column for the same reason as CoverageTable.screenshots — the
+  // pages have no lifecycle or query need apart from the report they belong
+  // to. Consumed by document export, which isn't built yet.
+  coverPages Json @default("[]")
 
   clientId   String
   client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -273,11 +278,27 @@ model Report {
 // pattern as Event under Client) — access inherits whatever the actor's
 // reports:* grants already resolve for the parent report.
 
+enum SectionType {
+  standard
+  custom
+}
+
 model Section {
-  id        String   @id @default(cuid())
-  reportId  String
-  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  name      String
+  id       String @id @default(cuid())
+  reportId String
+  report   Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  // Internal working label ("Print", "TV") shown in the editor's section list.
+  name String
+  // Heading rendered on the section's own page in the exported document
+  // ("Print Media Coverages"). Optional — falls back to `name` when unset.
+  title String?
+  // `standard` sections hold coverage tables; `custom` ones hold freeform
+  // content/image instead. Rendering dispatches on this, so a future section
+  // kind is a new branch rather than a rewrite. Only `standard` is built today.
+  type SectionType @default(standard)
+  // Freeform body + banner image for `custom` sections; unused when standard.
+  content   String?
+  image     String?
   order     Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

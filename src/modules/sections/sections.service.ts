@@ -11,6 +11,10 @@ function toSectionDto(section: Section): SectionDto {
     id: section.id,
     reportId: section.reportId,
     name: section.name,
+    title: section.title,
+    type: section.type,
+    content: section.content,
+    image: section.image,
     order: section.order,
     createdAt: section.createdAt,
     updatedAt: section.updatedAt,
@@ -37,7 +41,15 @@ export async function listSections(reportId: string, actor: ReportActor): Promis
 export async function createSection(input: CreateSectionInput, actor: ReportActor): Promise<SectionDto> {
   await getOwnedReport(input.reportId, actor);
   const section = await prisma.section.create({
-    data: { reportId: input.reportId, name: input.name, order: input.order },
+    data: {
+      reportId: input.reportId,
+      name: input.name,
+      title: input.title ?? null,
+      type: input.type,
+      content: input.content ?? null,
+      image: input.image ?? null,
+      order: input.order,
+    },
   });
   return toSectionDto(section);
 }
@@ -50,8 +62,14 @@ export async function updateSection(
   await getOwnedSection(id, actor);
   const section = await prisma.section.update({
     where: { id },
+    // Nullable fields spread on `!== undefined`, not truthiness, so an
+    // explicit null clears them while an omitted key leaves them untouched.
     data: {
       ...(input.name !== undefined && { name: input.name }),
+      ...(input.title !== undefined && { title: input.title }),
+      ...(input.type !== undefined && { type: input.type }),
+      ...(input.content !== undefined && { content: input.content }),
+      ...(input.image !== undefined && { image: input.image }),
       ...(input.order !== undefined && { order: input.order }),
     },
   });
