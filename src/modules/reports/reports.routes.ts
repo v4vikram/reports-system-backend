@@ -27,6 +27,16 @@ reportsRouter.get(
   asyncHandler(controller.getById)
 );
 
+// Exports whatever the requester can already view — same visibility gate as
+// getById, not a separate permission. Sits above perUserRateLimit's default
+// window without its own carve-out; rendering a PDF is heavier than a normal
+// request but not something a legitimate user does often enough to need one.
+reportsRouter.get(
+  "/:id/export.pdf",
+  requirePermission(PERMISSIONS.REPORTS_READ, PERMISSIONS.REPORTS_READ_ALL),
+  asyncHandler(controller.exportPdf)
+);
+
 reportsRouter.post(
   "/",
   requirePermission(PERMISSIONS.REPORTS_CREATE),

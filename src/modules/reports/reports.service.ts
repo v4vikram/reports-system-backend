@@ -4,7 +4,7 @@ import { prisma } from "../../lib/prisma.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { getOwnedClient } from "../clients/clients.service.js";
 import type { ClientActor } from "../clients/clients.service.js";
-import type { CoverPage, CreateReportInput, ReportDto, ReportsQuery, UpdateReportInput } from "./reports.types.js";
+import type { CanvasPage, CreateReportInput, ReportDto, ReportsQuery, UpdateReportInput } from "./reports.types.js";
 
 // Who is acting, and how much of the reports table they may see.
 // - portalClientId is a hard ceiling: if set, it wins even over canReadAll —
@@ -42,7 +42,7 @@ function toReportDto(report: ReportWithAssignees): ReportDto {
     categoryId: report.categoryId,
     // Only ever written through updateReportSchema's validated shape — safe
     // to trust at read time, same reasoning as CoverageTable.screenshots.
-    coverPages: report.coverPages as unknown as CoverPage[],
+    coverPages: report.coverPages as unknown as CanvasPage[],
     createdAt: report.createdAt,
     updatedAt: report.updatedAt,
     assignees: report.assignees.map((a) => ({ id: a.user.id, name: a.user.name })),

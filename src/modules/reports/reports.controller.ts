@@ -4,6 +4,8 @@ import { PERMISSIONS } from "../../constants/permissions.js";
 import { getUserAccess } from "../../lib/access.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { getClientActor } from "../clients/clients.controller.js";
+import { getReportExportData } from "./reports.export.service.js";
+import { renderReportPdf } from "./reports.pdf.js";
 import * as reportsService from "./reports.service.js";
 import type { ReportActor } from "./reports.service.js";
 import type { CreateReportInput, ReportsQuery, UpdateReportInput } from "./reports.types.js";
@@ -47,4 +49,19 @@ export async function update(req: Request, res: Response) {
 export async function remove(req: Request, res: Response) {
   await reportsService.deleteReport(req.params.id as string, await getReportActor(req));
   res.status(HttpStatus.NO_CONTENT).send();
+}
+
+export async function exportPdf(req: Request, res: Response) {
+  const data = await getReportExportData(req.params.id as string, await getReportActor(req));
+  // Built from the incoming request rather than a configured constant — this
+  // server has no fixed public URL of its own (see config/uploads.ts), so
+  // "how this request reached us" is the only reliable base for turning
+  // "/uploads/xyz.png" into an absolute URL react-pdf's Image can fetch.
+  const baseUrl = `${req.protocol}://${req.get("host")}`;
+  const buffer = await renderReportPdf(data, baseUrl);
+
+  const filename = `${data.reportTitle.replace(/[^a-z0-9-_ ]/gi, "").trim() || "report"}.pdf`;
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.send(buffer);
 }

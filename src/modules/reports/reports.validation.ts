@@ -11,9 +11,64 @@ export const createReportSchema = z.object({
   assigneeUserIds: z.array(z.string().min(1)).default([]),
 });
 
+// A canvas page's objects, discriminated by `type`. Shared x/y/width/height/
+// rotation/zIndex placement fields, then per-type visual props. This is a
+// document format (like CoverageTable.screenshots), not a relational
+// resource — an object gets replaced wholesale with its page on every save,
+// never addressed by its own endpoint, since canvas edits (drag/resize) fire
+// far too often for one REST call per field the way CoverageRow fields do.
+const baseCanvasObjectSchema = {
+  id: z.string().min(1),
+  x: z.number(),
+  y: z.number(),
+  width: z.number().min(1),
+  height: z.number().min(1),
+  rotation: z.number().default(0),
+  zIndex: z.number().int().default(0),
+};
+
+const textObjectSchema = z.object({
+  ...baseCanvasObjectSchema,
+  type: z.literal("text"),
+  content: z.string().max(5000).default(""),
+  fontSize: z.number().min(1).default(16),
+  fontWeight: z.enum(["normal", "medium", "bold"]).default("normal"),
+  color: z.string().default("#000000"),
+  align: z.enum(["left", "center", "right"]).default("left"),
+  letterSpacing: z.number().default(0),
+});
+
+const imageObjectSchema = z.object({
+  ...baseCanvasObjectSchema,
+  type: z.literal("image"),
+  src: z.string().max(2000).nullable().default(null),
+  radius: z.number().min(0).default(0),
+  opacity: z.number().min(0).max(1).default(1),
+});
+
+const shapeObjectSchema = z.object({
+  ...baseCanvasObjectSchema,
+  type: z.literal("shape"),
+  shapeType: z.enum(["rectangle", "ellipse", "line"]).default("rectangle"),
+  fill: z.string().nullable().default("#3b82f6"),
+  stroke: z.string().nullable().default(null),
+  strokeWidth: z.number().min(0).default(0),
+  radius: z.number().min(0).default(0),
+});
+
+const canvasObjectSchema = z.discriminatedUnion("type", [
+  textObjectSchema,
+  imageObjectSchema,
+  shapeObjectSchema,
+]);
+
+// 794x1123 = A4 at 96dpi, the same convention the reference editor used.
 const coverPageSchema = z.object({
-  content: z.string().max(20000).nullable().default(null),
-  image: z.string().max(2000).nullable().default(null),
+  id: z.string().min(1),
+  width: z.number().min(1).default(794),
+  height: z.number().min(1).default(1123),
+  background: z.string().default("#ffffff"),
+  objects: z.array(canvasObjectSchema).default([]),
 });
 
 // eventId is immutable after creation, same reasoning as Event.clientId.
