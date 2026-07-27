@@ -16,6 +16,10 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().optional(),
+  // Optional, not required: the "Auto-Fill from Image" coverage-row
+  // extraction feature degrades to a clear 503 (see coverageRows.service.ts)
+  // rather than crashing the whole server on boot when it's unset.
+  GEMINI_API_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

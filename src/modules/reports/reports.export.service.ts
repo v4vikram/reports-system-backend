@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma.js";
+import type { ScreenshotItem } from "../coverageTables/coverageTables.types.js";
 import type { ReportActor } from "./reports.service.js";
 import { getOwnedReport } from "./reports.service.js";
 import type { CanvasPage } from "./reports.types.js";
@@ -19,6 +20,8 @@ export interface ExportTable {
   category: string | null;
   hiddenColumns: string[];
   rows: ExportRow[];
+  screenshots: ScreenshotItem[];
+  color: string | null;
 }
 
 export interface ExportSection {
@@ -60,6 +63,10 @@ export async function getReportExportData(id: string, actor: ReportActor): Promi
       tables: section.tables.map((table) => ({
         category: table.category,
         hiddenColumns: table.hiddenColumns,
+        // Only ever written through updateCoverageTableSchema's validated
+        // shape (see coverageTables.validation.ts) — safe to trust here.
+        screenshots: table.screenshots as unknown as ScreenshotItem[],
+        color: table.color,
         rows: table.rows.map((row) => ({
           srNo: row.srNo,
           headline: row.headline,

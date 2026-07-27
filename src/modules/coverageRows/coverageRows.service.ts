@@ -1,6 +1,8 @@
 import type { CoverageRow } from "@prisma/client";
 import { HttpStatus } from "../../constants/httpStatus.js";
-import { getOwnedCoverageTable } from "../coverageTables/coverageTables.service.js";
+import { extractRowsFromImage } from "../../lib/gemini.js";
+import { getOwnedCoverageTable, toCoverageTableDto } from "../coverageTables/coverageTables.service.js";
+import type { CoverageTableDto } from "../coverageTables/coverageTables.types.js";
 import { prisma } from "../../lib/prisma.js";
 import { ApiError } from "../../utils/ApiError.js";
 import type { ReportActor } from "../reports/reports.service.js";
@@ -84,4 +86,47 @@ export async function updateCoverageRow(
 export async function deleteCoverageRow(id: string, actor: ReportActor): Promise<void> {
   await getOwnedRow(id, actor);
   await prisma.coverageRow.delete({ where: { id } });
+}
+
+function parseExtractedDate(value: string): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+// AI auto-fill: parses a screenshot of a coverage table into rows via
+// Gemini (lib/gemini.ts — runs server-side only, the API key never reaches
+// the browser) and appends them to the table, continuing srNo/order from
+// whatever's already there. Returns the whole table (not just the new rows)
+// so the frontend can replace its cached copy in one shot, same convention
+// as every other coverage-table-mutating endpoint.
+export async function extractRowsFromImageIntoTable(
+  coverageTableId: string,
+  actor: ReportActor,
+  file: { buffer: Buffer; mimeType: string }
+): Promise<CoverageTableDto> {
+  const table = await getOwnedCoverageTable(coverageTableId, actor);
+  const extracted = await extractRowsFromImage(file.buffer, file.mimeType);
+
+  if (extracted.length > 0) {
+    const startSrNo = table.rows.reduce((max, row) => Math.max(max, row.srNo), 0) + 1;
+    const startOrder = table.rows.length;
+    await prisma.coverageRow.createMany({
+      data: extracted.map((row, index) => ({
+        coverageTableId,
+        srNo: startSrNo + index,
+        headline: row.headline || null,
+        publication: row.publication || null,
+        edition: row.edition || null,
+        pageNo: row.pageNo || null,
+        date: parseExtractedDate(row.date),
+        link: row.link || null,
+        isTopCoverage: false,
+        order: startOrder + index,
+      })),
+    });
+  }
+
+  const updated = await getOwnedCoverageTable(coverageTableId, actor);
+  return toCoverageTableDto(updated);
 }

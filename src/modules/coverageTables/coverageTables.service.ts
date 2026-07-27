@@ -17,7 +17,10 @@ const coverageTableInclude = {
 
 type CoverageTableWithRows = Prisma.CoverageTableGetPayload<{ include: typeof coverageTableInclude }>;
 
-function toCoverageTableDto(table: CoverageTableWithRows): CoverageTableDto {
+// Exported: CoverageRows' extract-from-image flow creates rows directly via
+// Prisma (not through this module's own create path) then needs to return
+// the same DTO shape the rest of the table endpoints return.
+export function toCoverageTableDto(table: CoverageTableWithRows): CoverageTableDto {
   return {
     id: table.id,
     sectionId: table.sectionId,
@@ -27,6 +30,7 @@ function toCoverageTableDto(table: CoverageTableWithRows): CoverageTableDto {
     // Only ever written through updateCoverageTableSchema's validated shape
     // (see coverageTables.validation.ts) — safe to trust at read time.
     screenshots: table.screenshots as unknown as ScreenshotItem[],
+    color: table.color,
     rows: table.rows.map((row) => ({
       id: row.id,
       coverageTableId: row.coverageTableId,
@@ -74,7 +78,7 @@ export async function createCoverageTable(
 ): Promise<CoverageTableDto> {
   await getOwnedSection(input.sectionId, actor);
   const table = await prisma.coverageTable.create({
-    data: { sectionId: input.sectionId, category: input.category, order: input.order },
+    data: { sectionId: input.sectionId, category: input.category, order: input.order, color: input.color },
     include: coverageTableInclude,
   });
   return toCoverageTableDto(table);
@@ -95,6 +99,7 @@ export async function updateCoverageTable(
       ...(input.screenshots !== undefined && {
         screenshots: input.screenshots as unknown as Prisma.InputJsonValue,
       }),
+      ...(input.color !== undefined && { color: input.color }),
     },
     include: coverageTableInclude,
   });

@@ -15,10 +15,18 @@ export const COVERAGE_COLUMN_KEYS = [
   "image",
 ] as const;
 
+// Hex string ("#4472C4") or null — null means "auto" (the PDF export
+// alternates the two defaults by table position; see reports.pdf.ts).
+const colorSchema = z
+  .string()
+  .regex(/^#[0-9a-fA-F]{6}$/, "color must be a 6-digit hex value")
+  .nullable();
+
 export const createCoverageTableSchema = z.object({
   sectionId: z.string().min(1),
   category: z.string().max(80).nullable().default(null),
   order: z.number().int().min(0).default(0),
+  color: colorSchema.default(null),
 });
 
 const screenshotSchema = z.object({
@@ -34,6 +42,7 @@ export const updateCoverageTableSchema = z.object({
   hiddenColumns: z.array(z.enum(COVERAGE_COLUMN_KEYS)).optional(),
   // Full-replace-the-set semantics, same convention as assignRoles/assignPermissions.
   screenshots: z.array(screenshotSchema).optional(),
+  color: colorSchema.optional(),
 });
 
 export const coverageTablesQuerySchema = z.object({

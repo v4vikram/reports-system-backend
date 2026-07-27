@@ -325,6 +325,11 @@ model CoverageTable {
   // column, not its own table — unlike rows, screenshots have no independent
   // lifecycle or query need beyond "the list attached to this table."
   screenshots Json @default("[]")
+  // Header/border/row-tint theme color for this table, as a hex string
+  // ("#4472C4"). Null means "auto" — the PDF export alternates the two
+  // defaults (blue/orange) by the table's position, so nobody has to pick
+  // anything; this only holds an explicit override once a user picks one.
+  color String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
