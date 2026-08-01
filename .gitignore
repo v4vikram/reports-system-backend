@@ -1,4 +1,14 @@
 node_modules/
 dist/
 .env
+.env.*
 *.log
+
+# Locally-stored uploaded files (see src/config/uploads.ts) — not source, and
+# should live on persistent storage on the deploy target, not in git.
+/uploads/*
+!/uploads/.gitkeep
+
+/src/generated/prisma
+
+/src/generated/prisma
