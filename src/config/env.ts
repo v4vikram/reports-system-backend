@@ -1,4 +1,6 @@
-import "dotenv/config";
+// Must come before anything reads process.env — picks the right .env file for
+// this NODE_ENV. See load-env.ts for why it is not a cascade.
+import "./load-env.js";
 import { z } from "zod";
 
 // Env vars arrive as strings; accept the usual spellings of a boolean rather
