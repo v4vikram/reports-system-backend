@@ -12,8 +12,8 @@ const REFRESH_COOKIE = "refreshToken";
 
 const baseCookieOptions: CookieOptions = {
   httpOnly: true,
-  secure: env.NODE_ENV === "production",
-  sameSite: "lax",
+  secure: env.COOKIE_SECURE,
+  sameSite: env.COOKIE_SAMESITE,
 };
 
 // Refresh cookie is scoped to /api/auth — it's only ever needed by the
