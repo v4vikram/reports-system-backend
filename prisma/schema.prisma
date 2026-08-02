@@ -6,4 +6,371 @@ datasource db {
   provider = "postgresql"
 }
 
-// Domain models go here once we design them.
+// ---- Module 1: Auth (see docs/ERD.md) ----
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  // System roles (ADMIN/EDITOR/VIEWER) are seeded and can't be deleted via API.
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+// Static catalog seeded from constants/permissions.ts. key = "resource:action".
+model Permission {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  roles RolePermission[]
+  users UserPermission[]
+
+  @@map("permissions")
+}
+
+model User {
+  id              String     @id @default(cuid())
+  name            String
+  email           String     @unique
+  passwordHash    String
+  status          UserStatus @default(INVITED)
+  emailVerifiedAt DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  // A user's effective permissions = union of every role's permissions plus
+  // these direct grants. See lib/access.ts.
+  roles             UserRole[]
+  directPermissions UserPermission[]
+  assignedClients   Client[]
+  // The Client CRM record this user logs in AS, if they're a portal login
+  // (see Client.portalUserId). Distinct from assignedClients, which is the
+  // employee-manages-client direction.
+  clientProfile     Client?          @relation("ClientPortalUser")
+  reportAssignments ReportAssignee[]
+
+  refreshTokens           RefreshToken[]
+  passwordResetTokens     PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  authAuditLogs           AuthAuditLog[]
+
+  @@map("users")
+}
+
+// ---- Module 2: RBAC join tables (see docs/ERD.md) ----
+
+model UserRole {
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+// Direct (per-user) permission grants, independent of role membership.
+model UserPermission {
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, permissionId])
+  @@index([permissionId])
+  @@map("user_permissions")
+}
+
+// Refresh tokens are persisted (hashed) so sessions can be revoked before
+// expiry. replacedByTokenId links rotation chains: if a revoked token is
+// ever presented again, that's a theft signal (see auth.service.ts).
+model RefreshToken {
+  id                String        @id @default(cuid())
+  userId            String
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash         String        @unique
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  replacedByTokenId String?       @unique
+  replacedByToken   RefreshToken? @relation("TokenRotation", fields: [replacedByTokenId], references: [id])
+  previousToken     RefreshToken? @relation("TokenRotation")
+  createdByIp       String?
+  userAgent         String?
+  createdAt         DateTime      @default(now())
+
+  @@index([userId, revokedAt])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+// Append-only. userId is nullable so failed logins against unknown emails
+// are still recorded for anomaly detection.
+model AuthAuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  event     String
+  ipAddress String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([event, createdAt])
+  @@map("auth_audit_logs")
+}
+
+// ---- Module 3: Categories ----
+
+model Category {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  description String?
+  parentId    String?
+  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[] @relation("CategoryTree")
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  reports Report[]
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+// ---- Module 4: Clients (see docs/ERD.md) ----
+
+model Client {
+  id             String   @id @default(cuid())
+  name           String
+  company        String?
+  email          String?
+  phone          String?
+  address        String?
+  notes          String?
+  isActive       Boolean  @default(true)
+  // The employee (user) responsible for this client; nullable = unassigned.
+  assignedUserId String?
+  assignedUser   User?    @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+  // The CLIENT-role user who logs in AS this client (a portal login), set by
+  // an admin. Distinct from assignedUserId (the employee who manages this
+  // client). Nullable = no portal access yet.
+  portalUserId   String?  @unique
+  portalUser     User?    @relation("ClientPortalUser", fields: [portalUserId], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  events  Event[]
+  reports Report[]
+
+  @@index([assignedUserId])
+  @@index([portalUserId])
+  @@map("clients")
+}
+
+// ---- Module 5: Events & Reports (see docs/ERD.md) ----
+
+model Event {
+  id          String    @id @default(cuid())
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  eventDate   DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  reports Report[]
+
+  @@index([clientId])
+  @@map("events")
+}
+
+model Report {
+  id      String  @id @default(cuid())
+  title   String
+  content String?
+  // Ordered cover/intro pages preceding the sections: {content, image}[].
+  // A JSON column for the same reason as CoverageTable.screenshots — the
+  // pages have no lifecycle or query need apart from the report they belong
+  // to. Consumed by document export, which isn't built yet.
+  coverPages Json @default("[]")
+
+  clientId   String
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  eventId    String
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  // Restrict (not the codebase's usual Cascade): categories are shared
+  // taxonomy referenced across unrelated clients, so deleting one shouldn't
+  // silently wipe another client's report history. See categories.service.ts
+  // deleteCategory for the friendlier pre-check backing this constraint.
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignees ReportAssignee[]
+  sections  Section[]
+
+  @@index([clientId])
+  @@index([eventId])
+  @@index([categoryId])
+  @@map("reports")
+}
+
+// ---- Module 6: Report content — Sections & Coverage Tables ----
+// Sub-resources of Report; carry no permission keys of their own (same
+// pattern as Event under Client) — access inherits whatever the actor's
+// reports:* grants already resolve for the parent report.
+
+enum SectionType {
+  standard
+  custom
+}
+
+model Section {
+  id       String @id @default(cuid())
+  reportId String
+  report   Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  // Internal working label ("Print", "TV") shown in the editor's section list.
+  name String
+  // Heading rendered on the section's own page in the exported document
+  // ("Print Media Coverages"). Optional — falls back to `name` when unset.
+  title String?
+  // `standard` sections hold coverage tables; `custom` ones hold freeform
+  // content/image instead. Rendering dispatches on this, so a future section
+  // kind is a new branch rather than a rewrite. Only `standard` is built today.
+  type SectionType @default(standard)
+  // Freeform body + banner image for `custom` sections; unused when standard.
+  content   String?
+  image     String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tables CoverageTable[]
+
+  @@index([reportId])
+  @@map("sections")
+}
+
+model CoverageTable {
+  id        String  @id @default(cuid())
+  sectionId String
+  section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  // Free-text media-type label ("TV", "Print", "Online", ...) for how this
+  // table groups its clippings — distinct from Report.categoryId's taxonomy.
+  category String?
+  order    Int     @default(0)
+  // Column keys hidden from this table's display. Validated against a fixed
+  // enum at the API boundary (coverage-tables.validation.ts) — a plain
+  // string array with no such check would let a typo silently no-op.
+  hiddenColumns String[] @default([])
+  // Gallery of supporting screenshots: {url, caption, order}[]. A JSON
+  // column, not its own table — unlike rows, screenshots have no independent
+  // lifecycle or query need beyond "the list attached to this table."
+  screenshots Json @default("[]")
+  // Header/border/row-tint theme color for this table, as a hex string
+  // ("#4472C4"). Null means "auto" — the PDF export alternates the two
+  // defaults (blue/orange) by the table's position, so nobody has to pick
+  // anything; this only holds an explicit override once a user picks one.
+  color String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rows CoverageRow[]
+
+  @@index([sectionId])
+  @@map("coverage_tables")
+}
+
+model CoverageRow {
+  id              String        @id @default(cuid())
+  coverageTableId String
+  coverageTable   CoverageTable @relation(fields: [coverageTableId], references: [id], onDelete: Cascade)
+  srNo            Int           @default(0)
+  headline        String?
+  publication     String?
+  edition         String?
+  // Kept as a string, not Int — real page references include ranges and
+  // labels ("3-4", "Front Page"), not just plain integers.
+  pageNo        String?
+  date          DateTime?
+  link          String?
+  image         String?
+  isTopCoverage Boolean   @default(false)
+  order         Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([coverageTableId])
+  @@map("coverage_rows")
+}
+
+// M2M: which employees are assigned to a report.
+model ReportAssignee {
+  reportId String
+  report   Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([reportId, userId])
+  @@index([userId])
+  @@map("report_assignees")
+}
