@@ -5,6 +5,52 @@ export type CreateReportInput = z.infer<typeof createReportSchema>;
 export type UpdateReportInput = z.infer<typeof updateReportSchema>;
 export type ReportsQuery = z.infer<typeof reportsQuerySchema>;
 
+interface BaseCanvasObject {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  zIndex: number;
+}
+
+export interface TextCanvasObject extends BaseCanvasObject {
+  type: "text";
+  content: string;
+  fontSize: number;
+  fontWeight: "normal" | "medium" | "bold";
+  color: string;
+  align: "left" | "center" | "right";
+  letterSpacing: number;
+}
+
+export interface ImageCanvasObject extends BaseCanvasObject {
+  type: "image";
+  src: string | null;
+  radius: number;
+  opacity: number;
+}
+
+export interface ShapeCanvasObject extends BaseCanvasObject {
+  type: "shape";
+  shapeType: "rectangle" | "ellipse" | "line";
+  fill: string | null;
+  stroke: string | null;
+  strokeWidth: number;
+  radius: number;
+}
+
+export type CanvasObject = TextCanvasObject | ImageCanvasObject | ShapeCanvasObject;
+
+export interface CanvasPage {
+  id: string;
+  width: number;
+  height: number;
+  background: string;
+  objects: CanvasObject[];
+}
+
 export interface ReportDto {
   id: string;
   title: string;
@@ -12,6 +58,9 @@ export interface ReportDto {
   clientId: string;
   eventId: string;
   categoryId: string;
+  // Report.coverPages Json column, reinterpreted as canvas pages (see
+  // reports.validation.ts's coverPageSchema) — same DB column, richer shape.
+  coverPages: CanvasPage[];
   createdAt: Date;
   updatedAt: Date;
   // Resolved {id,name} pairs, not flat ids — a portal-linked CLIENT viewer is

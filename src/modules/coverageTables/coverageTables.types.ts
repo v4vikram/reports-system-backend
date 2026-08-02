@@ -23,6 +23,9 @@ export interface CoverageTableDto {
   order: number;
   hiddenColumns: string[];
   screenshots: ScreenshotItem[];
+  // Hex header/border/tint theme color, or null for "auto" (see
+  // coverageTables.validation.ts's colorSchema).
+  color: string | null;
   // Embedded, not fetched separately — a table's rows are always needed
   // together with it, unlike Events/Reports which stay independently listable.
   rows: CoverageRowDto[];

@@ -20,3 +20,9 @@ export const createCoverageRowSchema = z.object({
 // Section.reportId — a row never moves between tables, only gets deleted
 // and recreated if mis-placed.
 export const updateCoverageRowSchema = createCoverageRowSchema.omit({ coverageTableId: true }).partial();
+
+// multipart/form-data body for extractFromImage — the file itself is
+// handled by multer separately, this only validates the accompanying field.
+export const extractFromImageSchema = z.object({
+  coverageTableId: z.string().min(1),
+});

@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .env
+.env.*
 *.log
 
 # Locally-stored uploaded files (see src/config/uploads.ts) — not source, and
