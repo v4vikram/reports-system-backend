@@ -98,8 +98,8 @@ export async function logout(req: Request, res: Response) {
   const rawRefreshToken = req.cookies?.[REFRESH_COOKIE];
   await authService.logoutUser(rawRefreshToken, requestContext(req));
 
-  res.clearCookie(ACCESS_COOKIE, { path: "/" });
-  res.clearCookie(REFRESH_COOKIE, { path: "/api/auth" });
+  res.clearCookie(ACCESS_COOKIE, accessCookieOptions);
+  res.clearCookie(REFRESH_COOKIE, refreshCookieOptions);
   res.status(HttpStatus.NO_CONTENT).send();
 }
 
