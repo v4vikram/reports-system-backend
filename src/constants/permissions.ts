@@ -21,6 +21,11 @@ export const PERMISSIONS = {
   CATEGORIES_READ: "categories:read",
   CATEGORIES_MANAGE: "categories:manage",
 
+  EVENTS_CREATE: "events:create",
+  EVENTS_READ: "events:read",
+  EVENTS_UPDATE: "events:update",
+  EVENTS_DELETE: "events:delete",
+
   REPORTS_CREATE: "reports:create",
   REPORTS_READ: "reports:read",
   // Scope grant: see every report, not just ones you're assigned to.
@@ -48,6 +53,10 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
   { key: PERMISSIONS.CLIENTS_DELETE, description: "Delete clients" },
   { key: PERMISSIONS.CATEGORIES_READ, description: "View categories" },
   { key: PERMISSIONS.CATEGORIES_MANAGE, description: "Create, update, and delete categories" },
+  { key: PERMISSIONS.EVENTS_CREATE, description: "Create events" },
+  { key: PERMISSIONS.EVENTS_READ, description: "View events for clients you can see" },
+  { key: PERMISSIONS.EVENTS_UPDATE, description: "Update events" },
+  { key: PERMISSIONS.EVENTS_DELETE, description: "Delete events" },
   { key: PERMISSIONS.REPORTS_CREATE, description: "Create reports" },
   { key: PERMISSIONS.REPORTS_READ, description: "View reports assigned to you" },
   { key: PERMISSIONS.REPORTS_READ_ALL, description: "View all reports (not just assigned)" },

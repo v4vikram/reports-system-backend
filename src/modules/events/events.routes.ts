@@ -11,34 +11,37 @@ export const eventsRouter = Router();
 
 eventsRouter.use(requireAuth, perUserRateLimit);
 
-// Events carry no permission keys of their own — every route here gates on
-// the same clients:* permission that would let the actor manage the parent
-// Client; getOwnedClient (via events.service.ts) further scopes which rows.
+// Events carry their own permission keys (events:create/read/update/delete),
+// but row-level visibility is still inherited entirely from the parent
+// Client — getOwnedClient (via events.service.ts) is what actually decides
+// *which* events a given actor's grant lets them touch, same as it always
+// has. Holding events:read without clients:read-all still only surfaces
+// events under clients you're assigned to or the portal login for.
 eventsRouter.get(
   "/",
-  requirePermission(PERMISSIONS.CLIENTS_READ),
+  requirePermission(PERMISSIONS.EVENTS_READ),
   validate(eventsQuerySchema, "query"),
   asyncHandler(controller.list)
 );
 
-eventsRouter.get("/:id", requirePermission(PERMISSIONS.CLIENTS_READ), asyncHandler(controller.getById));
+eventsRouter.get("/:id", requirePermission(PERMISSIONS.EVENTS_READ), asyncHandler(controller.getById));
 
 eventsRouter.post(
   "/",
-  requirePermission(PERMISSIONS.CLIENTS_UPDATE),
+  requirePermission(PERMISSIONS.EVENTS_CREATE),
   validate(createEventSchema),
   asyncHandler(controller.create)
 );
 
 eventsRouter.patch(
   "/:id",
-  requirePermission(PERMISSIONS.CLIENTS_UPDATE),
+  requirePermission(PERMISSIONS.EVENTS_UPDATE),
   validate(updateEventSchema),
   asyncHandler(controller.update)
 );
 
 eventsRouter.delete(
   "/:id",
-  requirePermission(PERMISSIONS.CLIENTS_DELETE),
+  requirePermission(PERMISSIONS.EVENTS_DELETE),
   asyncHandler(controller.remove)
 );

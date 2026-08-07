@@ -5,9 +5,11 @@ import { clientOwnershipWhere, getOwnedClient } from "../clients/clients.service
 import type { ClientActor } from "../clients/clients.service.js";
 import type { CreateEventInput, UpdateEventInput } from "./events.types.js";
 
-// Events have no permission keys of their own — visibility/management is
+// Events gate on their own events:* permission keys at the route level
+// (events.routes.ts), but row-level visibility/management is still
 // inherited entirely from whatever access the actor has to the parent
-// Client (see clients.service.ts's getOwnedClient).
+// Client (see clients.service.ts's getOwnedClient) — a scoped actor can't
+// touch another client's events no matter what events:* grants they hold.
 async function getOwnedEvent(id: string, actor: ClientActor) {
   const event = await prisma.event.findUnique({ where: { id } });
   if (!event) throw new ApiError(HttpStatus.NOT_FOUND, "Event not found");
